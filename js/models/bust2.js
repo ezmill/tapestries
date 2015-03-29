@@ -5,10 +5,10 @@
         "formatVersion" : 3.1,
         "sourceFile"    : "bust2.obj",
         "generatedBy"   : "OBJConverter",
-        "vertices"      : 118328,
-        "faces"         : 129795,
+        "vertices"      : 120082,
+        "faces"         : 133241,
         "normals"       : 0,
-        "uvs"           : 118799,
+        "uvs"           : 121047,
         "materials"     : 1
     },
 

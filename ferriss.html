@@ -1513,7 +1513,7 @@ function initFrameDifferencing() {
         mouseX: globalUniforms.mouseX,
         mouseY: globalUniforms.mouseY
     }, "vs", 
-    "colorFs"); //these first three/four fragment shader object things are where most of the feedback loop is happening
+    "fs"); //these first three/four fragment shader object things are where most of the feedback loop is happening
 
     frameDifferencer = new feedbackObject({
         time: globalUniforms.time,

@@ -5,10 +5,10 @@
         "formatVersion" : 3.1,
         "sourceFile"    : "cloth3.obj",
         "generatedBy"   : "OBJConverter",
-        "vertices"      : 3876,
-        "faces"         : 3750,
+        "vertices"      : 641601,
+        "faces"         : 640000,
         "normals"       : 0,
-        "uvs"           : 3876,
+        "uvs"           : 753622,
         "materials"     : 0
     },
 

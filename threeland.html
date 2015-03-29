@@ -1,0 +1,947 @@
+<html>
+<head>
+<script src="js/three.min.js"></script>
+<script src="js/OrbitControls.js"></script>
+<script src="js/FirstPersonControls.js"></script>
+<script src="js/PointerLockControls.js"></script>
+<!--<script src="//ajax.googleapis.com/ajax/libs/jquery/1.11.0/jquery.min.js"></script>-->
+<style>
+body{
+	padding: 0px;
+	margin: 0px;
+
+}
+</style>
+</head>
+<body>
+<div id="container"></div>
+
+<script id="passThrough" type="x-shader/x-fragment">
+		varying vec2 vUv;
+		uniform sampler2D tex;
+
+		void main() {
+			gl_FragColor = texture2D(tex, vUv);
+		}
+</script>
+
+<script id="fxaa" type="x-shader/x-fragment">
+		uniform sampler2D tDiffuse;
+		uniform vec2 resolution;
+
+		#define FXAA_REDUCE_MIN   (1.0/128.0)
+		#define FXAA_REDUCE_MUL   (1.0/8.0)
+		#define FXAA_SPAN_MAX     8.0
+
+		void main() {
+
+			vec3 rgbNW = texture2D( tDiffuse, ( gl_FragCoord.xy + vec2( -1.0, -1.0 ) ) * resolution ).xyz;
+			vec3 rgbNE = texture2D( tDiffuse, ( gl_FragCoord.xy + vec2( 1.0, -1.0 ) ) * resolution ).xyz;
+			vec3 rgbSW = texture2D( tDiffuse, ( gl_FragCoord.xy + vec2( -1.0, 1.0 ) ) * resolution ).xyz;
+			vec3 rgbSE = texture2D( tDiffuse, ( gl_FragCoord.xy + vec2( 1.0, 1.0 ) ) * resolution ).xyz;
+			vec4 rgbaM  = texture2D( tDiffuse,  gl_FragCoord.xy  * resolution );
+			vec3 rgbM  = rgbaM.xyz;
+			vec3 luma = vec3( 0.299, 0.587, 0.114 );
+
+			float lumaNW = dot( rgbNW, luma );
+			float lumaNE = dot( rgbNE, luma );
+			float lumaSW = dot( rgbSW, luma );
+			float lumaSE = dot( rgbSE, luma );
+			float lumaM  = dot( rgbM,  luma );
+			float lumaMin = min( lumaM, min( min( lumaNW, lumaNE ), min( lumaSW, lumaSE ) ) );
+			float lumaMax = max( lumaM, max( max( lumaNW, lumaNE) , max( lumaSW, lumaSE ) ) );
+
+			vec2 dir;
+			dir.x = -((lumaNW + lumaNE) - (lumaSW + lumaSE));
+			dir.y =  ((lumaNW + lumaSW) - (lumaNE + lumaSE));
+
+			float dirReduce = max( ( lumaNW + lumaNE + lumaSW + lumaSE ) * ( 0.25 * FXAA_REDUCE_MUL ), FXAA_REDUCE_MIN );
+
+			float rcpDirMin = 1.0 / ( min( abs( dir.x ), abs( dir.y ) ) + dirReduce );
+			dir = min( vec2( FXAA_SPAN_MAX,  FXAA_SPAN_MAX),
+				  max( vec2(-FXAA_SPAN_MAX, -FXAA_SPAN_MAX),
+						dir * rcpDirMin)) * resolution;
+			vec4 rgbA = (1.0/2.0) * (
+        	texture2D(tDiffuse,  gl_FragCoord.xy  * resolution + dir * (1.0/3.0 - 0.5)) +
+			texture2D(tDiffuse,  gl_FragCoord.xy  * resolution + dir * (2.0/3.0 - 0.5)));
+    		vec4 rgbB = rgbA * (1.0/2.0) + (1.0/4.0) * (
+			texture2D(tDiffuse,  gl_FragCoord.xy  * resolution + dir * (0.0/3.0 - 0.5)) +
+      		texture2D(tDiffuse,  gl_FragCoord.xy  * resolution + dir * (3.0/3.0 - 0.5)));
+    		float lumaB = dot(rgbB, vec4(luma, 0.0));
+
+			if ( ( lumaB < lumaMin ) || ( lumaB > lumaMax ) ) {
+
+				gl_FragColor = rgbA;
+
+			} else {
+				gl_FragColor = rgbB;
+
+			}
+
+		}
+</script>
+
+<script id ="emboss" type="x-shader/x-fragment">
+varying vec2 vUv;
+uniform sampler2D u_image;
+uniform float step_w;
+uniform float step_h;
+
+      vec2 offset[9];
+      vec2 tc = vUv*1.25;
+
+      void main() {
+        float kernel[9];
+        vec4 sum = vec4(0.0);
+
+        offset[0] = vec2(-step_w, -step_h);
+		offset[1] = vec2(0.0, -step_h);
+		offset[2] = vec2(step_w, -step_h);
+		offset[3] = vec2(-step_w, 0.0);
+		offset[4] = vec2(0.0, 0.0);
+		offset[5] = vec2(step_w, 0.0);
+		offset[6] = vec2(-step_w, step_h);
+		offset[7] = vec2(0.0, step_h);
+		offset[8] = vec2(step_w, step_h);
+
+		kernel[0] = 0.0; kernel[1] = 6.1; kernel[2] = 0.0;
+		kernel[3] = 0.0; kernel[4] = -3.0; kernel[5] = 0.0;
+		kernel[6] = 0.0; kernel[7] = -3.0; kernel[8] = 0.0;
+
+		for (int i = 0; i < 9; i++) {
+			sum += texture2D(u_image,vUv+offset[i])*(kernel[i]);
+		}
+
+		sum += texture2D(u_image, vec2(tc.x - step_w, tc.y)); //left
+		sum += texture2D(u_image, vec2(tc.x + step_w, tc.y)); //right
+		sum += texture2D(u_image, vec2(tc.x, tc.y - step_w)); //bottom
+		sum += texture2D(u_image, vec2(tc.x, tc.y + step_h)); //top
+		sum /= 6.0;
+
+          vec4 c = sum;
+    
+
+        gl_FragColor = c+ vec4(vec3(0.000009),0.0) +0.5;
+
+      }
+</script>
+
+<script id="sharpen" type="x-shader/x-fragment">
+	uniform sampler2D tex;
+	varying vec2 vUv;
+	varying vec3 vecPos;
+	varying vec3 vecNormal;
+
+	uniform float step_w;
+	uniform float step_h;
+
+	uniform vec3 pointLightColor[MAX_POINT_LIGHTS];
+	uniform vec3 pointLightPosition[MAX_POINT_LIGHTS];
+	uniform float pointLightDistance[MAX_POINT_LIGHTS];
+
+	vec3 rgb2hsv(vec3 c){
+	    vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
+	    vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
+	    vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
+	    
+	    float d = q.x - min(q.w, q.y);
+	    float e = 1.0e-10;
+	    return vec3(abs(( (q.z + (q.w - q.y) / (6.0 * d + e))) ), d / (q.x + e), q.x);
+	}
+
+	vec3 hsv2rgb(vec3 c){
+	    vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+	    vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+	    return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+	}
+	
+	void main() {
+		
+	  vec4 addedLights = vec4(vec3(0.0),1.0);
+	  float shin = 500.0;
+
+	  for(int i = 0; i< MAX_POINT_LIGHTS; i++){
+	  	vec3 lightDirection = normalize(vecPos - pointLightPosition[i]);
+	  	float sf = max(0.0,dot(pointLightColor[i], lightDirection));
+	  	sf = pow(sf, shin);
+	  	addedLights.rgb += clamp(dot(-lightDirection, vecNormal),0.0,1.0)*(pointLightColor[i]);
+	  	//addedLights += sf;
+	  }
+		
+	  float zoom = 0.999;
+	  vec2 pos = (vUv - vec2(0.5,0.5)) * (zoom) + vec2(0.5);
+
+	  vec2 sharpenOffset = vec2(step_w, step_h)*0.001;
+	  vec4 color = texture2D(tex, pos)*addedLights;
+
+	  //blur
+	  color += texture2D(tex, vec2(vUv.x - step_w, vUv.y)); //left
+	  color += texture2D(tex, vec2(vUv.x + step_w, vUv.y)); //right
+	  color += texture2D(tex, vec2(vUv.x, vUv.y - step_w)); //bottom
+	  color += texture2D(tex, vec2(vUv.x, vUv.y + step_h)); //top
+	  color /= 6.0;
+
+	  //emboss or sharpen
+	  color += texture2D(tex, vec2(vUv.x, vUv.y)-sharpenOffset); //bottom
+	  color -= texture2D(tex, vec2(vUv.x, vUv.y) + sharpenOffset*-100.5); //top
+
+	  //reduce color if all white
+	  float avg = (color.r+color.g+color.b)/3.0;
+	  //color = avg < 0.45 ? color+0.1 : color;
+	  //color = avg > 0.65 ? color-0.1 : color;
+
+	  vec3 hsv = rgb2hsv(color.rgb);
+	  hsv.r +=0.01;
+	  hsv.r = mod(hsv.r, 1.0);
+
+	  hsv.b += 0.1;
+	  vec3 rgb = hsv2rgb(hsv);
+
+	  gl_FragColor =  vec4(rgb,1.0);
+	}
+</script>
+
+<script id="vertexShader" type="x-shader/x-vertex">
+		varying vec2 vUv;
+		varying vec3 vecPos;
+		varying vec3 vecNormal;
+
+		vec4 zoom = vec4(1.005,1.005,1.0,1.0);
+		void main() {
+			vUv = uv;
+			vecPos = (modelMatrix * vec4(position, 1.0)).xyz;
+			vecNormal = (modelMatrix * vec4(normal, 0.0)).xyz;
+			gl_Position =  projectionMatrix * modelViewMatrix* vec4( position, 1.0 );
+
+		}
+</script>
+<script id="diffFs">
+uniform sampler2D texture;
+uniform sampler2D texture2;
+uniform sampler2D texture3;
+varying vec2 vUv;
+
+void main() {
+  vec4 tex0 = texture2D(texture, vUv);
+  vec4 tex1 = texture2D(texture2, vUv);
+  vec4 tex2 = texture2D(texture3, vUv);
+
+  vec4 fc = (tex2 - tex1);
+  float avg = dot(tex2.rgb - tex1.rgb, vec3(1.0))/3.0;
+  // fc = avg <= 0.01  ? fc : 1.0-fc;
+  vec4 add = (fc + tex0);
+  gl_FragColor = (fc);//mod(add,tex2.r);
+  // gl_FragColor = smoothstep(tex2,tex0,mod(add,tex2.r));
+}
+</script>
+<script id="blurFrag" type="x-shader/x-fragment">
+uniform sampler2D texture;
+uniform vec2 resolution;
+uniform float mouseX;
+uniform float mouseY;
+
+varying vec2 vUv;
+
+void main() {
+  float step_w = 1.0/resolution.x;
+  float step_h = 1.0/resolution.y;
+  vec2 tc = vUv;
+  vec4 input0 = texture2D(texture,tc);
+   
+  vec2 x1 = vec2(step_w, 0.0);
+  vec2 y1 = vec2(0.0, step_h);
+    
+  input0 += texture2D(texture, tc+x1); // right
+  input0 += texture2D(texture, tc-x1); // left
+  input0 += texture2D(texture, tc+y1); // top
+  input0 += texture2D(texture, tc-y1); // bottom
+
+  input0 *=0.2;
+
+  gl_FragColor = input0;
+}
+</script>
+<script id="sharpenFrag" type="x-shader/x-fragment">
+uniform sampler2D texture;
+uniform sampler2D texture2;
+uniform vec2 resolution;
+uniform float mouseX;
+uniform float mouseY;
+
+varying vec2 vUv;
+float kernel[9];
+vec2 offset[9];
+void main() {
+  float step_w = 1.0/resolution.x;
+  float step_h = 1.0/resolution.y;
+  vec2 tc = vUv;
+  vec4 input0 = texture2D(texture,tc);
+   
+  // kernel[0] = -2.0; kernel[1] = -1.0; kernel[2] = 0.0;
+  // kernel[3] = -1.0; kernel[4] = 1.0; kernel[5] = 1.0;
+  // kernel[6] = 0.0; kernel[7] = 1.0; kernel[8] = 2.0; 
+  kernel[0] = -1.0; kernel[1] = -1.0; kernel[2] = -1.0;
+  kernel[3] = -1.0; kernel[4] = 8.0; kernel[5] = -1.0;
+  kernel[6] = -1.0; kernel[7] = -1.0; kernel[8] = -1.0; 
+
+
+  offset[0] = vec2(-step_w, -step_h);
+  offset[1] = vec2(0.0, -step_h);
+  offset[2] = vec2(step_w, -step_h);
+  offset[3] = vec2(-step_w, 0.0);
+  offset[4] = vec2(0.0, 0.0);
+  offset[5] = vec2(step_w, 0.0);
+  offset[6] = vec2(-step_w, step_h);
+  offset[7] = vec2(0.0, step_h);
+  offset[8] = vec2(step_w, step_h);
+    
+  input0 += texture2D(texture, tc + offset[0]) * kernel[0];
+  input0 += texture2D(texture, tc + offset[1]) * kernel[1];
+  input0 += texture2D(texture, tc + offset[2]) * kernel[2];
+  input0 += texture2D(texture, tc + offset[3]) * kernel[3];
+  input0 += texture2D(texture, tc + offset[4]) * kernel[4];
+  input0 += texture2D(texture, tc + offset[5]) * kernel[5];
+  input0 += texture2D(texture, tc + offset[6]) * kernel[6];
+  input0 += texture2D(texture, tc + offset[7]) * kernel[7];
+  input0 += texture2D(texture, tc + offset[8]) * kernel[8];
+
+
+  // input0 *=0.2;
+  float kernelWeight = kernel[0] + kernel[2] + kernel[3] + kernel[4] + kernel[5] + kernel[6] + kernel[7] + kernel[8]; 
+
+  if (kernelWeight <= 0.0) {
+     kernelWeight = 1.0;
+   }
+  gl_FragColor = vec4(mix((input0/kernelWeight).rgb, texture2D(texture, vUv).rgb, 1.0), 1.0);
+}
+</script>
+<script id="colorFs">
+uniform sampler2D texture;
+varying vec2 vUv;
+uniform float mouseX;
+uniform float mouseY;
+
+vec3 rainbow(float h) {
+  h = mod(mod(h, 1.0) + 1.0, 1.0);
+  float h6 = h * 6.0;
+  float r = clamp(h6 - 4.0, 0.0, 1.0) +
+    clamp(2.0 - h6, 0.0, 1.0);
+  float g = h6 < 2.0
+    ? clamp(h6, 0.0, 1.0)
+    : clamp(4.0 - h6, 0.0, 1.0);
+  float b = h6 < 4.0
+    ? clamp(h6 - 2.0, 0.0, 1.0)
+    : clamp(6.0 - h6, 0.0, 1.0);
+  return vec3(r, g, b);
+}
+
+vec3 rgb2hsv(vec3 c)
+{
+    vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
+    vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
+    vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
+    
+    float d = q.x - min(q.w, q.y);
+    float e = 1.0e-10;
+    return vec3(abs(( (q.z + (q.w - q.y) / (6.0 * d + e))) ), d / (q.x + e), q.x);
+}
+
+vec3 hsv2rgb(vec3 c)
+{
+    vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+    vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+    return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+}
+
+
+void main(){
+
+  vec4 tex0 = texture2D(texture, vUv);
+  vec3 hsv = rgb2hsv(tex0.rgb);
+
+  hsv.r += 0.001;
+  hsv.r = mod(hsv.r, 1.0);
+  hsv.g *= 1.005;
+  // hsv.g = mod(hsv.g, 1.0);
+  vec3 rgb = hsv2rgb(hsv); 
+
+  gl_FragColor = vec4(rgb,1.0);
+  // gl_FragColor = vec4(0.0,rgb.g,0.0,1.0);
+}
+</script>
+<script type="x-shader/x-fragment" id="flow2">
+ 
+    uniform vec2 resolution;
+    uniform float time;
+    uniform sampler2D texture;
+    varying vec2 vUv;
+    uniform float mouseX;
+    uniform float mouseY;
+
+    void main( void ){
+      vec2 p = gl_FragCoord.xy / resolution.xy;
+      
+      // vec2 uv = p*0.15 + 0.25;
+      vec2 uv = vUv;
+      // vec2 uv = vUv*0.05 + vec2(0.62, 0.57);
+      
+      vec2 e = 1.0/resolution.xy;
+      
+      
+      // float am1 = 0.5 + 0.5*sin( time );
+      float am1 = 0.5 + 0.5*0.927180409;
+      // float am2 = 0.5 + 0.5*cos( time );
+      float am2 = 10.0;
+      
+      for( int i=0; i<20; i++ ){
+        float h  = dot( texture2D(texture, uv,               -100.0).xyz, vec3(0.333) );
+        float h1 = dot( texture2D(texture, uv+vec2(e.x,mouseX), -100.0).xyz, vec3(0.333) );
+        float h2 = dot( texture2D(texture, uv+vec2(mouseY,e.y), -100.0).xyz, vec3(0.333) );
+            // gradient
+        vec2 g = 0.001*vec2( (h1-h), (h2-h) )/e;
+            // isoline    
+        // vec2 f = g.yx*vec2(-1.0,1.0);
+        vec2 f = g.yx*vec2(3.0*mouseX, 3.0*mouseY);
+        
+        g = mix( g, f, am1 );
+        
+        uv -= 0.0001*g*am2;
+      }
+      
+      vec3 col = texture2D(texture, uv).xyz;
+      
+        // col *= 2.0;
+        
+      gl_FragColor = vec4(col, 1.0);
+    }
+</script>
+<script id="vs" type="x-shader/x-vertex">
+
+    varying vec2 vUv;
+    uniform float time;
+    void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+    }
+</script>
+<script id="fs" type="x-fragment/x-shader">
+uniform sampler2D texture; 
+uniform float time; // seconds
+varying vec2 vUv;
+uniform vec2 resolution;
+
+void main() {
+    gl_FragColor = texture2D(texture, vUv);
+}
+</script>
+<script>
+var container, scene, renderer, controls;
+var scene, screenScene, baseTex, tex1, tex2, camera, screenCamera, plane, cube, sphere, shader1, light;
+var w = window.innerWidth;
+var h = window.innerHeight;
+var wHalf = w/2;
+var hHalf = h/2;
+var clock = new THREE.Clock();
+var camControls;
+var objects = [];
+var ray;
+var time = Date.now();
+var moveForward = false;
+var moveBackward = false;
+var moveLeft = false;
+var moveRight = false;
+
+var prevTime = performance.now();
+var velocity = new THREE.Vector3();
+var globalUniforms = {
+		time: { type: "f", value: 0.0 } ,
+		resolution: {type: "v2", value: new THREE.Vector2(w,h)},
+		step_w: {type: "f", value: 1/w},
+		step_h: {type: "f", value: 1/h},
+		mouseX: {type: "f", value: 1.0},
+		mouseY: {type: "f", value: 1.0},
+		tv_resolution: {type: "f", value: 640.0},
+		tv_resolution_y: {type: "f", value: 1600.0}
+	}
+container = document.getElementById('container');
+document.addEventListener('mousedown', onDocumentMouseDown, false);
+
+function onDocumentMouseDown(event){
+	//console.log(camControls);
+}
+
+
+
+var havePointerLock = 'pointerLockElement' in document || 'mozPointerLockElement' in document || 'webkitPointerLockElement' in document;
+
+	if( havePointerLock ){
+		var element = document.body;
+
+		var pointerlockchange = function ( event ) {
+			if(document.pointerLockElement === element || document.mozPointerLockElement === element || document.webkitPointerLockElement === element){
+				controls.enabled = true;
+				console.log("controls are true");
+			} else{
+				controls.enabled = false;
+				console.log("controls are false");
+			}
+		}
+		var pointerlockerror = function ( event ) {
+			console.log(event);
+		}
+
+		document.addEventListener( 'pointerlockchange', pointerlockchange, false );
+		document.addEventListener( 'mozpointerlockchange', pointerlockchange, false );
+		document.addEventListener( 'webkitpointerlockchange', pointerlockchange, false );
+
+		document.addEventListener( 'pointerlockerror', pointerlockerror, false );
+		document.addEventListener( 'mozpointerlockerror', pointerlockerror, false );
+		document.addEventListener( 'webkitpointerlockerror', pointerlockerror, false );
+
+		document.addEventListener('click', function(event){
+			element.requestPointerLock = element.requestPointerLock || element.mozRequestPointerLock || element.webkitRequestPointerLock;
+			if ( /Firefox/i.test( navigator.userAgent ) ) {
+				var fullscreenchange = function ( event ) {
+
+					if ( document.fullscreenElement === element || document.mozFullscreenElement === element || document.mozFullScreenElement === element ) {
+						document.removeEventListener( 'fullscreenchange', fullscreenchange );
+						document.removeEventListener( 'mozfullscreenchange', fullscreenchange );
+						element.requestPointerLock();
+					}
+				}
+
+				document.addEventListener( 'fullscreenchange', fullscreenchange, false );
+				document.addEventListener( 'mozfullscreenchange', fullscreenchange, false );
+				element.requestFullscreen = element.requestFullscreen || element.mozRequestFullscreen || element.mozRequestFullScreen || element.webkitRequestFullscreen;
+				element.requestFullscreen();
+
+			} else {
+				element.requestPointerLock();
+			}
+
+		}, false );
+		
+	}
+
+
+
+
+init();
+// animate();
+
+function init(){
+	
+
+	scene = new THREE.Scene();
+	screenScene = new THREE.Scene();
+
+	//scene.fog = new THREE.FogExp2( 0x000000, 0.0009 );
+	//screenScene.fog = new THREE.FogExp2( 0x000000, 0.09 );
+	var ambient = new THREE.AmbientLight(0x111111);
+	//scene.add(ambient);
+
+	light = new THREE.PointLight(0xf2023e);
+	light.position.set(0,550,2900);
+	scene.add(light);
+
+	var light2 = new THREE.PointLight(0xCFC44C);
+	light2.position.set(0,2000,5500);
+	scene.add(light2);
+
+	var light3 = new THREE.PointLight(0x0044ff);
+	light3.position.set(300,50,3100);
+	scene.add(light3);
+
+
+	var light4 = new THREE.PointLight(0xfffff);
+	light4.position.set(0,-3000,3700);
+	//scene.add(light4);
+
+
+	tex1 = new THREE.WebGLRenderTarget( w,h, { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, format: THREE.RGBAFormat });
+	tex2 = new THREE.WebGLRenderTarget( w,h, { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, format: THREE.RGBAFormat });
+
+	var res = new THREE.Vector2(1.0/w, 1.0/h);
+
+	shader1 = new THREE.ShaderMaterial({
+		uniforms: THREE.UniformsUtils.merge([
+			THREE.UniformsLib['lights'],
+			{
+			time: { type: 'f', value: 0.0},
+			tex: { type: 't', value: null},
+			resolution: {type: 'v2', value: res},
+			step_w: { type: 'f', value: 1.0/w},
+			step_h: { type: 'f', value: 1.0/h} 
+			}
+		]),
+		vertexShader: document.getElementById('vertexShader').textContent,
+		fragmentShader: document.getElementById('sharpen').textContent,
+		shading: THREE.SmoothShading,
+		side: THREE.DoubleSide,
+		lights: true
+	});
+
+	shader1.uniforms.tex.value = tex2;
+	shader1.needsUpdate = true;
+
+	screenCamera = new THREE.OrthographicCamera( w  / -2, w  /  2, h /  2, h / -2, -10000, 10000 );
+	screenScene.add( screenCamera );
+
+	var screenGeometry = new THREE.PlaneBufferGeometry( w,h );
+	var screenMaterial = new THREE.MeshBasicMaterial( { map: tex1 } );
+	var quad = new THREE.Mesh( screenGeometry, screenMaterial ); 
+	screenScene.add(quad);
+
+	//camera = new THREE.OrthographicCamera(w/-2, w/2,  h/2, h/-2, -10000, 10000);
+	camera = new THREE.PerspectiveCamera(45, w/h, 0.1,40000);
+	camera.position.set(0,0,5000);
+	camera.lookAt(scene.position);
+	scene.add(camera);
+
+	controls = new THREE.PointerLockControls( camera );
+	scene.add(controls.getObject());
+
+	var onKeyDown = function ( event ) {
+		switch ( event.keyCode ) {
+			case 38: // up
+			case 87: // w
+				moveForward = true;
+				break;
+			case 37: // left
+			case 65: // a
+				moveLeft = true; break;
+			case 40: // down
+			case 83: // s
+				moveBackward = true;
+				break;
+			case 39: // right
+			case 68: // d
+				moveRight = true;
+				break;
+			case 32: // space
+				if ( canJump === true ) velocity.y += 350;
+				canJump = false;
+				break;
+		}
+	};
+	var onKeyUp = function ( event ) {
+		switch( event.keyCode ) {
+			case 38: // up
+			case 87: // w
+				moveForward = false;
+				break;
+			case 37: // left
+			case 65: // a
+				moveLeft = false;
+				break;
+			case 40: // down
+			case 83: // s
+				moveBackward = false;
+				break;
+			case 39: // right
+			case 68: // d
+				moveRight = false;
+				break;
+		}
+	};
+
+	document.addEventListener( 'keydown', onKeyDown, false );
+	document.addEventListener( 'keyup', onKeyUp, false );
+
+	ray = new THREE.Raycaster();
+	ray.ray.direction.set(0,-1,0);
+
+	var planeGeo = new THREE.PlaneBufferGeometry(w*6, w*6);
+	var cubeGeo = new THREE.BoxGeometry(300,300,300);
+	var sphereGeo = new THREE.SphereGeometry(50, 32, 16);
+	var planeMat = new THREE.MeshBasicMaterial({map: tex2});
+	var wireMaterial = new THREE.MeshPhongMaterial( { color: 0xffffff, wireframe: false, transparent: false } );
+
+	plane = new THREE.Mesh(planeGeo, shader1);
+	plane.position.set(0,0,-500);
+	scene.add(plane);
+
+	plane2 = new THREE.Mesh(planeGeo, shader1);
+	plane2.position.set(-w*6/2,0,-500+w*6/2);
+	plane2.rotation.y = 90 * Math.PI/180;
+	scene.add(plane2);
+
+	plane2.needsUpdate = true;
+
+	plane3 = new THREE.Mesh(planeGeo, shader1);
+	plane3.position.set(0,-w*6/2,-500+w*6/2);
+	plane3.rotation.x = 270 * Math.PI/180;
+	scene.add(plane3);
+
+	plane3.needsUpdate = true;
+
+	plane4 = new THREE.Mesh(planeGeo, shader1);
+	plane4.position.set(w*6/2,0,-500+w*6/2);
+	plane4.rotation.y = 270 * Math.PI/180;
+	scene.add(plane4);
+
+	plane4.needsUpdate = true;
+
+	var testMesh = new THREE.Mesh(sphereGeo, shader1);
+	testMesh.position.set(700,0,3000);
+	scene.add(testMesh);
+
+	cube = new THREE.Mesh(cubeGeo, wireMaterial);
+	cube.position.set(200,0,500);
+	scene.add(cube);
+
+	camera.lookAt(cube.position);
+
+	sphere = new THREE.Mesh(sphereGeo, wireMaterial);
+	sphere.position.set(200,0,500);
+	scene.add(sphere);
+
+
+	objects.push(plane);
+	objects.push(plane2);
+	objects.push(plane3);
+	objects.push(plane4);
+	objects.push(cube);
+
+
+	renderer = new THREE.WebGLRenderer( {antialias: true });
+	renderer.setSize(w, h);
+	renderer.autoClear = true;
+	renderer.context.getProgramInfoLog = function () { return '' }; //removes weird vertex attr binding error
+	// container.appendChild( renderer.domElement);
+
+	initOutputScene();
+	
+}
+
+function animate(){
+	// window.requestAnimationFrame(animate);
+	render();
+	update();
+}
+
+function update(){
+	var delta = clock.getDelta();
+	//controls.update();
+	//camControls.update(delta)
+	//camera.lookAt(cube.position);
+	//camera.rotation.z = Date.now()*0.00005;
+	// controls.isOnObject( false );
+	ray.ray.origin.copy( controls.getObject().position );
+	ray.ray.origin.y -= 10;
+
+	var intersections = ray.intersectObjects(objects);
+	var isOnObject = intersections.length > 0;
+	time = Date.now();
+	var delta = ( time - prevTime) / 100;
+
+	velocity.x -= velocity.x * 10.0 * delta;
+	velocity.z -= velocity.z * 10.0 * delta;
+	velocity.y -= 9.8 * 100.0 * delta; // 100.0 = mass
+	if ( moveForward ) velocity.z -= 800.0 * delta;
+	if ( moveBackward ) velocity.z += 800.0 * delta;
+	if ( moveLeft ) velocity.x -= 800.0 * delta;
+	if ( moveRight ) velocity.x += 800.0 * delta;
+
+	if ( isOnObject === true ) {
+		velocity.y = Math.max( 0, velocity.y );
+		canJump = true;
+	}
+	controls.getObject().translateX( velocity.x * delta );
+	controls.getObject().translateY( velocity.y * delta );
+	controls.getObject().translateZ( velocity.z * delta );
+	
+	if ( controls.getObject().position.y < 10 ) {
+		velocity.y = 0;
+		controls.getObject().position.y = 10;
+		canJump = true;
+	}
+
+	prevTime = time;
+
+	// controls.update( Date.now() - time);
+	
+}
+
+function render(){
+	cube.position.set(-100,Math.sin(Date.now()*0.005)*100,3000);
+	light.position.set(Math.sin(Date.now()*0.0005)*2000, 100,2900);
+	sphere.position.set(Math.sin(Date.now()*0.0005)*2000, 100,2900);
+	cube.rotation.z = (Date.now()*0.005);
+	renderer.render(scene, camera, tex1, true);
+	renderer.render(screenScene, screenCamera, tex2, true);
+	renderer.render(scene, camera);
+}
+
+
+function initOutputScene() {
+
+    outputCamera = new THREE.PerspectiveCamera(50, w / h, 1, 100000);
+    outputCamera.position.set(0, 0, 750);
+    //different camera for render targets - interesting results when outputCameraRTT is substituted with outputCamera in the outputDraw function
+    outputCameraRTT = new THREE.OrthographicCamera( w / - 2, w / 2, h / 2, h / - 2, -10000, 10000 );
+    outputCameraRTT.position.z = 100;
+
+    outputRenderer = new THREE.WebGLRenderer({preserveDrawingBuffer: true});
+    outputRenderer.setSize(w, h);
+    outputRenderer.setClearColor(0xffffff, 1);
+    outputRenderer.setBlending(THREE.CustomBlending, THREE.SubtractEquation, THREE.DstColorFactor, THREE.SrcColorFactor);
+
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    container.appendChild(outputRenderer.domElement);
+
+    outputScene = new THREE.Scene();
+
+    //global object for common uniforms b/c lots of fragment shaders 
+    // globalUniforms = {
+    //     time: { type: 'f', value: time },
+    //     resolution: { type: 'v2', value: new THREE.Vector2(w, h) },
+    //     mouseX: { type: 'f', value: 0.0 },
+    //     mouseY: { type: 'f', value: 0.0 }
+    // }
+
+    //takes input scene and makes it into a texture for frame differencing
+    initInputTexture();
+
+    //feedback loop setup
+    initFrameDifferencing();
+
+    //if you press space bar it'll take a screenshot - useful for being crazy prolific
+    // document.addEventListener('keydown', onKeyDown, false);
+    // document.addEventListener('mousemove', onDocumentMouseMove, false);
+
+    outputAnimate();
+}
+
+function initInputTexture() {
+    inputTexture = new THREE.Texture(renderer.domElement);;
+    inputTexture.needsUpdate = true;
+}
+
+function feedbackObject(uniforms, vertexShader, fragmentShader) {
+    this.scene = new THREE.Scene();
+    this.renderTarget = new THREE.WebGLRenderTarget(w, h, { minFilter: THREE.LinearFilter, magFilter: THREE.NearestFilter, format: THREE.RGBFormat});
+    this.material = new THREE.ShaderMaterial({
+        uniforms: uniforms, //uniforms object from constructor
+        vertexShader: document.getElementById(vertexShader).textContent,
+        fragmentShader: document.getElementById(fragmentShader).textContent
+    });
+    this.mesh = new THREE.Mesh(planeGeometry, this.material);
+    this.mesh.position.set(0, 0, 0);
+    this.scene.add(this.mesh);
+}
+
+function initFrameDifferencing() {
+    planeGeometry = new THREE.PlaneBufferGeometry(w, h);
+
+    feedbackObject1 = new feedbackObject({
+        time: globalUniforms.time,
+        resolution: globalUniforms.resolution,
+        texture: { type: 't', value: inputTexture },
+        mouseX: globalUniforms.mouseX,
+        mouseY: globalUniforms.mouseY
+    }, "vs", 
+    "flow2"); //string for fragment shader id - the only lines that really matter in this function, or the only lines you'll wanna change
+
+    feedbackObject2 = new feedbackObject({
+        time: globalUniforms.time,
+        resolution: globalUniforms.resolution,
+        texture: { type: 't', value: feedbackObject1.renderTarget }, //use previous feedback object's texture
+        texture2: { type: 't', value: inputTexture }, // p sure this line doesnt do anything lol
+        mouseX: globalUniforms.mouseX,
+        mouseY: globalUniforms.mouseY
+    }, "vs", 
+    "blurFrag"); //these first three/four fragment shader object things are where most of the feedback loop is happening
+
+    frameDifferencer = new feedbackObject({
+        time: globalUniforms.time,
+        resolution: globalUniforms.resolution,
+        texture: { type: 't', value: feedbackObject1.renderTarget },
+        texture2: { type: 't', value: feedbackObject2.renderTarget },
+        texture3: { type: 't', value: inputTexture },
+        mouseX: globalUniforms.mouseX,
+        mouseY: globalUniforms.mouseY
+    }, "vs", 
+    "diffFs"); //differencing fs - leave this one alone
+
+    feedbackObject3 = new feedbackObject({
+        time: globalUniforms.time,
+        resolution: globalUniforms.resolution,
+        texture: { type: 't', value: frameDifferencer.renderTarget },
+        mouseX: globalUniforms.mouseX,
+        mouseY: globalUniforms.mouseY
+    }, "vs", 
+    "blurFrag"); //this fs also contributes to feedback loop
+
+    feedbackObject4 = new feedbackObject({
+        time: globalUniforms.time,
+        resolution: globalUniforms.resolution,
+        texture: { type: 't', value: feedbackObject3.renderTarget },
+        texture2: { type: 't', value: tex2 },
+        mouseX: globalUniforms.mouseX,
+        mouseY: globalUniforms.mouseY
+    }, "vs", 
+    "sharpenFrag"); //this fs is basically post-processing
+
+
+    feedbackObject1.material.uniforms.texture.value = frameDifferencer.renderTarget; //previous frame as input
+
+    outputMaterial = new THREE.MeshBasicMaterial({
+        map: feedbackObject4.renderTarget
+    });
+    outputMesh = new THREE.Mesh(planeGeometry, outputMaterial);
+    outputScene.add(outputMesh);
+
+    rtt = new THREE.WebGLRenderTarget(w, h, { minFilter: THREE.LinearFilter, magFilter: THREE.NearestFilter, format: THREE.RGBFormat});
+
+
+}
+
+function outputAnimate() {
+    window.requestAnimationFrame(outputAnimate);
+    outputDraw();
+}
+
+function outputDraw() {
+
+    // time += 0.05;
+    // inputDraw();
+    animate();
+
+    inputTexture.needsUpdate = true;
+
+    // expand(1.01);// - similar to translateVs
+
+
+    //render all the render targets to their respective scenes
+    outputRenderer.render(feedbackObject2.scene, outputCameraRTT, feedbackObject2.renderTarget, true);
+    outputRenderer.render(frameDifferencer.scene, outputCameraRTT, frameDifferencer.renderTarget, true);
+    outputRenderer.render(feedbackObject3.scene, outputCameraRTT, feedbackObject3.renderTarget, true);
+    outputRenderer.render(feedbackObject4.scene, outputCameraRTT, feedbackObject4.renderTarget, true);
+
+    outputRenderer.render(outputScene, outputCamera);
+
+    //get new frame
+    outputRenderer.render(feedbackObject1.scene, outputCameraRTT, feedbackObject1.renderTarget, true);
+
+    // swap buffers - this is why feedbackObject3's fragment shader contributes to feedback loop but feedbackObject3 is just post-processing i think
+    var a = feedbackObject3.renderTarget;
+    feedbackObject3.renderTarget = feedbackObject1.renderTarget;
+    feedbackObject1.renderTarget = a;
+
+
+    outputRenderer.render(outputScene, outputCamera, rtt, true);
+    
+
+
+
+}
+
+function expand(expand) {
+    frameDifferencer.mesh.scale.set(expand, expand, expand);
+}
+
+</script>
+</body>
+</html>

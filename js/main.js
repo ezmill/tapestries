@@ -1,4 +1,4 @@
-var mainScene, camera, renderer, controls;
+var scene, camera, renderer, controls;
 var container;
 var loader;
 var w = window.innerWidth;
@@ -14,7 +14,7 @@ function initScene(){
 
 
     camera = new THREE.PerspectiveCamera(50, w / h, 1, 100000);
-    camera.position.set(0,0, 750);//test
+    camera.position.set(0,0, 1000);//test
     camera.rotation.y = Math.PI/4
     cameraRTT = new THREE.OrthographicCamera( w / - 2, w / 2, h / 2, h / - 2, -10000, 10000 );
 	cameraRTT.position.z = 100;
@@ -29,7 +29,7 @@ function initScene(){
     container.appendChild(renderer.domElement);
 
 
-    mainScene = new THREE.Scene();
+    scene = new THREE.Scene();
 
     globalUniforms = {
 		time: { type: "f", value: 0.0 } ,
@@ -64,8 +64,8 @@ function initScene(){
 			texture: "textures/rug.jpg",
 	    	vertexShader: "vs",
 	    	fragmentShader1: "fs",
-	    	fragmentShader2: "syrup-fs-2",
-	    	mainScene: mainScene
+	    	fragmentShader2: "fs",
+	    	mainScene: scene
 		});
 	cloth.uniforms = globalUniforms;
 	cloth.init(w,h);
@@ -78,9 +78,9 @@ function initScene(){
     combine: THREE.AddOperation,
     side: THREE.DoubleSide
     });
-	cloth.loadModel("js/models/cloth2.js", 0,0,0, 1.0, 0, 0, 0,clothMaterial);
+	cloth.loadModel("js/models/cloth3.js", 0,-300,0, 1.0, 0, 0, 0,clothMaterial);
 
-	plant = new FBObject({
+	bust = new FBObject({
 			w: w,
 	    	h: h, 
 	    	x: 0,
@@ -90,12 +90,12 @@ function initScene(){
 	    	vertexShader: "vs",
 	    	fragmentShader1: "fs",
 	    	fragmentShader2: "colorFs",
-	    	mainScene: mainScene
+	    	mainScene: scene
 		});
-	plant.uniforms = globalUniforms;
-	plant.init(w,h);
-	plantMaterial = new THREE.MeshLambertMaterial({color: 0xffffff})
-	plant.loadModel("js/models/bust.js", 0, 0, 0, 1.0, 0, 0, 0, plantMaterial);
+	bust.uniforms = globalUniforms;
+	bust.init(w,h);
+	bustMaterial = new THREE.MeshLambertMaterial({color: 0xffffff})
+	bust.loadModel("js/models/bust2.js", 0, -300, 0, 1.0, 0, 0, 0, bustMaterial);
 
 
     document.addEventListener('mousemove', onDocumentMouseMove, false);
@@ -112,7 +112,7 @@ function initScene(){
 	mesh.receiveShadow = true;
 	mesh.position.set(0,-7,0);
 	mesh.rotation.set(Math.PI/2,0,0);
-	// mainScene.add(mesh);
+	// scene.add(mesh);
 
     addLights();
     // onWindowResize();
@@ -127,11 +127,11 @@ function initScene(){
 }
 function addLights(){
 	var hemiLight = new THREE.HemisphereLight( 0xffffff, 0xffffff, 0.75 );
-	mainScene.add(hemiLight)
+	scene.add(hemiLight)
 	light = new THREE.DirectionalLight(0xffffff, 0.22);
 	light.position.x = 0;
 	light.position.y = 1000;
-	mainScene.add(light);
+	scene.add(light);
 
 // light.castShadow = true;
 
@@ -163,7 +163,7 @@ function onWindowResize( event ) {
 }
 function onDocumentMouseDown(event){
 		cloth.getFrame(cameraRTT);
-		plant.getFrame(cameraRTT);
+		bust.getFrame(cameraRTT);
 
 }
 var inc = 0;
@@ -173,15 +173,17 @@ function render(){
 
 	// FBObject1.material1.uniforms.texture.value.needsUpdate = true;
 	// display_inner.material1.uniforms.texture.value.needsUpdate = true;
-    // plantMaterial.color.setHSL((Math.sin(Date.now() * 0.00075) * 0.5 + 0.5), 1.0, 0.5);
-    plant.modelMesh.visible = false;
+    // bustMaterial.color.setHSL((Math.sin(Date.now() * 0.00075) * 0.5 + 0.5), 1.0, 0.5);
+    // bust.modelMesh.visible = false;
+    cloth.material1.uniforms.texture.needsUpdate = true;
+
 	// display_inner.modelMesh.castShadow = display_inner.modelMesh.receiveShadow = true;
 	// display_outer.modelMesh.castShadow = display_outer.modelMesh.receiveShadow = true;
 	// body.modelMesh.castShadow = body.modelMesh.receiveShadow = true;
-	// plant.modelMesh.rotation.y = Date.now()*0.0006;
+	// bust.modelMesh.rotation.y = Date.now()*0.0006;
 	// cloth.modelMesh.rotation.y = Date.now()*0.0006;
 	cloth.passTex();
-	plant.passTex();
+	bust.passTex();
 
 	controls.update();
 
@@ -193,7 +195,7 @@ function render(){
 		addFrames = false;
 	}
 	if(addFrames){
-		plant.getFrame(cameraRTT);
+		bust.getFrame(cameraRTT);
 		translate = true;
 	}
 	if(translate = true){
@@ -201,16 +203,16 @@ function render(){
 		// FBObject2.scale(0.999);
 
 	}
-	// cloth.getFrame(cameraRTT);
-	// plant.getFrame(cameraRTT);
+	cloth.getFrame(cameraRTT);
+	// bust.getFrame(cameraRTT);
 	cloth.render(cameraRTT);
-	plant.render(cameraRTT);
-	renderer.render(mainScene, camera);
+	bust.render(cameraRTT);
+	renderer.render(scene, camera);
 	cloth.cycle(cameraRTT);
-	plant.cycle(cameraRTT);
+	bust.cycle(cameraRTT);
 
-	// renderer.render(mainScene, camera, rtt, true);
-	// cloth.renderTargets[1] = rtt;
+	renderer.render(scene, camera, rtt, true);
+	cloth.material1.uniforms.texture.value = rtt;
 
 }
 function animate(){
