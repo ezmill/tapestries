@@ -24,9 +24,9 @@ function initScene(){
     renderer.setSize(w,h);
     renderer.setClearColor(0xffffff, 1);
 
-    container = document.createElement('div');
-    document.body.appendChild(container);
-    container.appendChild(renderer.domElement);
+    // container = document.createElement('div');
+    // document.body.appendChild(container);
+    // container.appendChild(renderer.domElement);
 
 
     scene = new THREE.Scene();
@@ -116,8 +116,8 @@ function initScene(){
 
     addLights();
     // onWindowResize();
-	animate();
-	// initOutputScene();
+	// animate();
+	initOutputScene();
 
 	rtt = new THREE.WebGLRenderTarget(w, h);
 	rtt.minFilter = THREE.LinearFilter;
@@ -175,7 +175,7 @@ function render(){
 	// display_inner.material1.uniforms.texture.value.needsUpdate = true;
     // bustMaterial.color.setHSL((Math.sin(Date.now() * 0.00075) * 0.5 + 0.5), 1.0, 0.5);
     // bust.modelMesh.visible = false;
-    cloth.material1.uniforms.texture.needsUpdate = true;
+    // cloth.material1.uniforms.texture.needsUpdate = true;
 
 	// display_inner.modelMesh.castShadow = display_inner.modelMesh.receiveShadow = true;
 	// display_outer.modelMesh.castShadow = display_outer.modelMesh.receiveShadow = true;
@@ -203,7 +203,7 @@ function render(){
 		// FBObject2.scale(0.999);
 
 	}
-	cloth.getFrame(cameraRTT);
+	// cloth.getFrame(cameraRTT);
 	// bust.getFrame(cameraRTT);
 	cloth.render(cameraRTT);
 	bust.render(cameraRTT);
@@ -211,12 +211,12 @@ function render(){
 	cloth.cycle(cameraRTT);
 	bust.cycle(cameraRTT);
 
-	renderer.render(scene, camera, rtt, true);
-	cloth.material1.uniforms.texture.value = rtt;
+	// renderer.render(scene, camera, rtt, true);
+	// cloth.material1.uniforms.texture.value = rtt;
 
 }
 function animate(){
-	window.requestAnimationFrame(animate);
+	// window.requestAnimationFrame(animate);
 	render();
 
 }
@@ -319,7 +319,7 @@ function initFrameDifferencing() {
         mouseX: globalUniforms.mouseX,
         mouseY: globalUniforms.mouseY
     }, "vs", 
-    "blurFrag"); //this fs also contributes to feedback loop
+    "fs"); //this fs also contributes to feedback loop
 
     feedbackObject4 = new feedbackObject({
         time: globalUniforms.time,
@@ -328,7 +328,7 @@ function initFrameDifferencing() {
         mouseX: globalUniforms.mouseX,
         mouseY: globalUniforms.mouseY
     }, "vs", 
-    "sharpenFrag"); //this fs is basically post-processing
+    "fs"); //this fs is basically post-processing
 
 
     feedbackObject1.material.uniforms.texture.value = frameDifferencer.renderTarget; //previous frame as input
@@ -377,7 +377,7 @@ function outputDraw() {
 
 
     outputRenderer.render(outputScene, outputCamera, rtt, true);
-    
+    cloth.material1.uniforms.texture.value = rtt;
 
 
 
