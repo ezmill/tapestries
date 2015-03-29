@@ -74,7 +74,9 @@ function initScene(){
     ambient: 0xffffff,
     specular: 0xffffff,
     shininess: 20,
-    map: cloth.renderTargets[1]
+    map: cloth.renderTargets[1],
+    combine: THREE.AddOperation,
+    side: THREE.DoubleSide
     });
 	cloth.loadModel("js/models/cloth2.js", 0,0,0, 1.0, 0, 0, 0,clothMaterial);
 
@@ -92,8 +94,8 @@ function initScene(){
 		});
 	plant.uniforms = globalUniforms;
 	plant.init(w,h);
-	plantMaterial = new THREE.MeshBasicMaterial({color: 0xffffff})
-	plant.loadModel("js/models/plant.js", 0, 0, 0, 1.0, 0, 0, 0, plantMaterial);
+	plantMaterial = new THREE.MeshLambertMaterial({color: 0xffffff})
+	plant.loadModel("js/models/bust.js", 0, 0, 0, 1.0, 0, 0, 0, plantMaterial);
 
 
     document.addEventListener('mousemove', onDocumentMouseMove, false);
