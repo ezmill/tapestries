@@ -80,7 +80,7 @@ function initInputTexture() {
     video = document.createElement("video");
     video.src = "satin.mp4";
     video.loop = true;
-    video.playbackRate = 0.25;
+    // video.playbackRate = 0.25;
     video.play();
     inputTexture = new THREE.Texture(video);
     inputTexture.needsUpdate = true;
@@ -109,7 +109,7 @@ function initFrameDifferencing() {
         mouseX: globalUniforms.mouseX,
         mouseY: globalUniforms.mouseY
     }, "vs", 
-    "flow2"); //string for fragment shader id - the only lines that really matter in this function, or the only lines you'll wanna change
+    "chromaFs"); //string for fragment shader id - the only lines that really matter in this function, or the only lines you'll wanna change
 
     feedbackObject2 = new feedbackObject({
         time: globalUniforms.time,
@@ -119,7 +119,7 @@ function initFrameDifferencing() {
         mouseX: globalUniforms.mouseX,
         mouseY: globalUniforms.mouseY
     }, "vs", 
-    "colorFs"); //these first three/four fragment shader object things are where most of the feedback loop is happening
+    "syrup-fs-2"); //these first three/four fragment shader object things are where most of the feedback loop is happening
 
     frameDifferencer = new feedbackObject({
         time: globalUniforms.time,
@@ -139,7 +139,7 @@ function initFrameDifferencing() {
         mouseX: globalUniforms.mouseX,
         mouseY: globalUniforms.mouseY
     }, "vs", 
-    "blurFrag"); //this fs also contributes to feedback loop
+    "chromaFs"); //this fs also contributes to feedback loop
 
     feedbackObject4 = new feedbackObject({
         time: globalUniforms.time,
@@ -148,7 +148,7 @@ function initFrameDifferencing() {
         mouseX: globalUniforms.mouseX,
         mouseY: globalUniforms.mouseY
     }, "vs", 
-    "sharpenFrag"); //this fs is basically post-processing
+    "syrup-fs-2"); //this fs is basically post-processing
 
 
     feedbackObject1.material.uniforms.texture.value = frameDifferencer.renderTarget; //previous frame as input
@@ -168,13 +168,14 @@ function initFrameDifferencing() {
                     arrow = new THREE.ArrowHelper( new THREE.Vector3( 0, 1, 0 ), new THREE.Vector3( 0, 0, 0 ), 50, 0xff0000 );
                 arrow.position.set( -200, 0, -200 );
 // pins = [ 0, cloth.w/4, cloth.w/2, 3*cloth.w/4, cloth.w ];
-pins = [ 0,1,2,3,4,5,6,7,8,9,10];
-    clothGeometry = new THREE.ParametricGeometry( clothFunction, 10, 10 );
+pins = [ 0,1,2,3,4,5,6,7,8,9,10, 11, 12, 13, 14];
+    clothGeometry = new THREE.ParametricGeometry( clothFunction, 14, 8 );
     clothGeometry.dynamic = true;
     clothGeometry.computeFaceNormals();
 
     object = new THREE.Mesh( clothGeometry, outputMaterial );
     object.position.set( 0, 0, 0 );
+    // object.rotation.set(Math.PI, 0, 0);
     object.castShadow = true;
     object.receiveShadow = true;
     outputScene.add( object );
@@ -217,7 +218,7 @@ function outputDraw() {
     clothGeometry.normalsNeedUpdate = true;
     clothGeometry.verticesNeedUpdate = true;
 
-    // expand(1.001);// - similar to translateVs
+    expand(1.01);// - similar to translateVs
 
 
     //render all the render targets to their respective scenes
@@ -244,7 +245,7 @@ function outputDraw() {
 
 //utility functions and event listeners
 function expand(expand) {
-    frameDifferencer.mesh.scale.set(1, expand, 1);
+    frameDifferencer.mesh.scale.set(expand, expand, expand);
 }
 
 function createModel(geometry, x, y, z, scale, rotX, rotY, rotZ, customMaterial){

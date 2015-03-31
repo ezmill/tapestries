@@ -56,7 +56,7 @@ void main(){
 
     vec2 tc = vUv;
     vec4 look = texture2D(texture,tc);//sample repos texture
-    vec2 offs = vec2(look.y-look.x,look.w-look.z)*vec2(0.009, 0.0005);
+    vec2 offs = vec2(look.y-look.x,look.w-look.z)*0.09;
     vec2 coord = offs+tc;  //relative coordinates
     
     vec4 repos = texture2D(texture, coord);

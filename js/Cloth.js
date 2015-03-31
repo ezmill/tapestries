@@ -16,8 +16,8 @@ var MASS = .1;
 var restDistance = 25;
 
 
-var xSegs = 10; //
-var ySegs = 10; //
+var xSegs = 14; //
+var ySegs = 8; //
 
 var clothFunction = plane(restDistance * xSegs, restDistance * ySegs);
 
