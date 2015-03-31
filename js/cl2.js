@@ -58,8 +58,6 @@ function initOutputScene() {
 
     outputScene = new THREE.Scene();
 
-    bustMaterial = new THREE.MeshLambertMaterial({color: 0xffffff})
-    loadModel("js/models/bust2.js", 0, -300, 0, 1.0, 0, 0, 0, bustMaterial)
     //takes input scene and makes it into a texture for frame differencing
     initInputTexture();
 
@@ -80,7 +78,7 @@ function initInputTexture() {
     // inputTexture = new THREE.Texture(renderer.domElement);;
     // inputTexture.needsUpdate = true;
     video = document.createElement("video");
-    video.src = "caustics.mp4";
+    video.src = "satin.mp4";
     video.loop = true;
     video.playbackRate = 0.25;
     video.play();
@@ -159,16 +157,29 @@ function initFrameDifferencing() {
     color: 0xffffff,
     ambient: 0xffffff,
     specular: 0xffffff,
-    shininess: 20,
+    shininess: 300,
     combine: THREE.AddOperation,
     side: THREE.DoubleSide,
     map: feedbackObject4.renderTarget
     });
     // outputMesh = new THREE.Mesh(planeGeometry, outputMaterial);
-    loadModel("js/models/cloth3.js", 0,-300,0, 1.0, 0, 0, 0,outputMaterial)
     // outputScene.add(outputMesh);
 
-    // rtt = new THREE.WebGLRenderTarget(w, h, { minFilter: THREE.LinearFilter, magFilter: THREE.NearestFilter, format: THREE.RGBFormat});
+                    arrow = new THREE.ArrowHelper( new THREE.Vector3( 0, 1, 0 ), new THREE.Vector3( 0, 0, 0 ), 50, 0xff0000 );
+                arrow.position.set( -200, 0, -200 );
+// pins = [ 0, cloth.w/4, cloth.w/2, 3*cloth.w/4, cloth.w ];
+pins = [ 0,1,2,3,4,5,6,7,8,9,10];
+    clothGeometry = new THREE.ParametricGeometry( clothFunction, 10, 10 );
+    clothGeometry.dynamic = true;
+    clothGeometry.computeFaceNormals();
+
+    object = new THREE.Mesh( clothGeometry, outputMaterial );
+    object.position.set( 0, 0, 0 );
+    object.castShadow = true;
+    object.receiveShadow = true;
+    outputScene.add( object );
+
+    rtt = new THREE.WebGLRenderTarget(w, h, { minFilter: THREE.LinearFilter, magFilter: THREE.NearestFilter, format: THREE.RGBFormat});
 
 
 }
@@ -180,8 +191,31 @@ function outputAnimate() {
 
 function outputDraw() {
 
-    // time += 0.05;
+    // time += 0.5;
     inputTexture.needsUpdate = true;
+   time = Date.now();
+
+    windStrength = Math.cos( time / 7000 ) * 20 + 40;
+    windForce.set( Math.sin( time / 2000 ), Math.cos( time / 3000 ), Math.sin( time / 1000 ) ).normalize().multiplyScalar( windStrength );
+    arrow.setLength( windStrength );
+    arrow.setDirection( windForce );
+
+    simulate(time);
+    // var timer = Date.now() * 0.0002;
+
+    var p = cloth.particles;
+
+    for ( var i = 0, il = p.length; i < il; i ++ ) {
+
+        clothGeometry.vertices[ i ].copy( p[ i ].position );
+
+    }
+
+    clothGeometry.computeFaceNormals();
+    clothGeometry.computeVertexNormals();
+
+    clothGeometry.normalsNeedUpdate = true;
+    clothGeometry.verticesNeedUpdate = true;
 
     // expand(1.001);// - similar to translateVs
 
@@ -201,6 +235,9 @@ function outputDraw() {
     var a = feedbackObject3.renderTarget;
     feedbackObject3.renderTarget = feedbackObject1.renderTarget;
     feedbackObject1.renderTarget = a;
+
+    outputRenderer.render(outputScene, outputCamera, rtt, true);
+    feedbackObject1.material.uniforms.texture.value = rtt;
 
 
 }
